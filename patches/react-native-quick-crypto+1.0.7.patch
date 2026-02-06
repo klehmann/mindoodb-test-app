@@ -1,0 +1,38 @@
+diff --git a/node_modules/react-native-quick-crypto/cpp/random/HybridRandom.cpp b/node_modules/react-native-quick-crypto/cpp/random/HybridRandom.cpp
+index b1a132c..e48eb06 100644
+--- a/node_modules/react-native-quick-crypto/cpp/random/HybridRandom.cpp
++++ b/node_modules/react-native-quick-crypto/cpp/random/HybridRandom.cpp
+@@ -39,6 +39,9 @@ std::shared_ptr<ArrayBuffer> HybridRandom::randomFillSync(const std::shared_ptr<
+   size_t size = checkSize(dSize);
+   size_t offset = checkOffset(dSize, dOffset);
+   uint8_t* data = buffer.get()->data();
++  if (!data) {
++    throw std::runtime_error("randomFillSync: ArrayBuffer data pointer is null (buffer may have been detached or garbage collected)");
++  }
+   if (RAND_bytes(data + offset, (int)size) != 1) {
+     throw std::runtime_error("error calling RAND_bytes: " + std::to_string(ERR_get_error()));
+   }
+diff --git a/node_modules/react-native-quick-crypto/src/random.ts b/node_modules/react-native-quick-crypto/src/random.ts
+index 4066c5a..0c641ff 100644
+--- a/node_modules/react-native-quick-crypto/src/random.ts
++++ b/node_modules/react-native-quick-crypto/src/random.ts
+@@ -73,9 +73,16 @@ export function randomFillSync<T extends ABV>(
+ 
+ export function randomFillSync(buffer: ABV, offset: number = 0, size?: number) {
+   getNative();
+-  buffer = abvToArrayBuffer(buffer);
+-  const res = random.randomFillSync(buffer, offset, size ?? buffer.byteLength);
+-  buffer = res;
++  // Copy into an owned ArrayBuffer so native code is not dependent on the
++  // original buffer reference staying valid (e.g. WASM memory growth can
++  // detach the underlying ArrayBuffer).
++  const src = abvToArrayBuffer(buffer);
++  const byteLen = size ?? src.byteLength;
++  const owned = new ArrayBuffer(byteLen);
++  new Uint8Array(owned).set(new Uint8Array(src, offset, byteLen));
++  const res = random.randomFillSync(owned, 0, byteLen);
++  // Copy the random bytes back into the caller's buffer
++  new Uint8Array(src, offset, byteLen).set(new Uint8Array(res));
+   return buffer;
+ }
+ 
