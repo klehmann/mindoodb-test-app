@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "mindoodb-test-app",
+    "slug": "mindoodb-test-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/splash-icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "packagerOpts": {
+      "host": "localhost",
+      "port": 8081
+    },
+    "scheme": "mindoodb-test-app",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.mindoodb.testapp"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.mindoodb.testapp"
+    },
+    "newArchEnabled": true,
+    "extra": {
+      "allowJsCryptoFallback": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}

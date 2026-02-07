@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebSearch",
+      "Bash(gh api:*)",
+      "WebFetch(domain:mozilla.github.io)",
+      "WebFetch(domain:www.npmjs.com)",
+      "WebFetch(domain:automerge.org)",
+      "Bash(gh search:*)",
+      "WebFetch(domain:jhugman.github.io)",
+      "Bash(curl:*)",
+      "WebFetch(domain:hacks.mozilla.org)",
+      "Bash(python3:*)",
+      "Bash(rustup show:*)",
+      "Bash(cargo check:*)",
+      "Bash(rustup update:*)",
+      "Bash(cargo:*)",
+      "Bash($HOME/.cargo/bin/cargo:*)",
+      "Bash($HOME/.rustup/toolchains/stable-aarch64-apple-darwin/bin/rustc --version)",
+      "Bash($HOME/.rustup/toolchains/stable-aarch64-apple-darwin/bin/cargo --version)",
+      "Bash(export PATH=\"$HOME/.cargo/bin:$PATH\")",
+      "Bash(/Users/klehmann/git/react-native-automerge-generated/scripts/build-check.sh:*)",
+      "Bash(/Users/klehmann/git/react-native-automerge-generated/scripts/build-ios.sh:*)",
+      "Bash(/Users/klehmann/git/react-native-automerge-generated/scripts/build-android.sh:*)",
+      "Bash(npx expo start:*)",
+      "Bash(find:*)"
+    ]
+  }
+}
