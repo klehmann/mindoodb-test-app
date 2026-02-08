@@ -8,6 +8,7 @@ import Constants from 'expo-constants';
 let BaseMindooTenantFactory, InMemoryContentAddressedStoreFactory, KeyBag, PUBLIC_INFOS_KEY_ID;
 let QuickCryptoAdapter = null;
 let ReactNativeCryptoAdapter = null;
+let VirtualViewFactory, ColumnSorting, TotalMode, VirtualViewDataChange;
 let mindoodbLoaded = false;
 let mindoodbLoadError = null;
 let mindoodbLoading = false;
@@ -28,6 +29,11 @@ function loadMindooDB() {
     // Keep both adapters available; choose at runtime
     QuickCryptoAdapter = mindoodb.QuickCryptoAdapter;
     ReactNativeCryptoAdapter = mindoodb.ReactNativeCryptoAdapter;
+    // Load virtual view classes
+    VirtualViewFactory = mindoodb.VirtualViewFactory;
+    ColumnSorting = mindoodb.ColumnSorting;
+    TotalMode = mindoodb.TotalMode;
+    VirtualViewDataChange = mindoodb.VirtualViewDataChange;
     mindoodbLoaded = true;
     console.log('MindooDB loaded successfully');
     console.log('QuickCryptoAdapter:', typeof QuickCryptoAdapter);
@@ -336,12 +342,17 @@ export default function App() {
 
       setTestResults(prev => prev + `Creating ${numDocs} documents...\n`);
       const baseTime = Date.now();
-      
+
+      const categories = ['Sales', 'Engineering', 'Marketing'];
+      const priorities = ['High', 'Medium', 'Low'];
+      const names = ['Project Alpha', 'Project Beta', 'Project Gamma', 'Task Delta', 'Initiative Epsilon',
+                     'Campaign Zeta', 'Feature Eta', 'Update Theta', 'Report Iota', 'Analysis Kappa'];
+
       for (let i = 0; i < numDocs; i++) {
         if (i % 100 === 0) {
           setTestResults(prev => prev + `  Created ${i}/${numDocs} documents...\n`);
         }
-        
+
         const doc = await db.createDocument();
         const docId = doc.getId();
 
@@ -349,6 +360,10 @@ export default function App() {
           const data = d.getData();
           data.index = i;
           data.timestamp = baseTime + i;
+          data.category = categories[i % categories.length];
+          data.priority = priorities[i % priorities.length];
+          data.name = names[i];
+          data.amount = (i + 1) * 1000; // $1000, $2000, ..., $10000
         });
 
         const updatedDoc = await db.getDocument(docId);
@@ -356,6 +371,22 @@ export default function App() {
           docId: docId,
           lastModified: updatedDoc.getLastModified()
         });
+
+        // Debug first document
+        if (i === 0) {
+          const debugData = updatedDoc.getData();
+          console.log('=== DEBUG: First document data ===');
+          console.log('Raw getData():', debugData);
+          console.log('typeof debugData:', typeof debugData);
+          console.log('Object.keys:', Object.keys(debugData));
+          console.log('category value:', debugData.category);
+          console.log('typeof category:', typeof debugData.category);
+          console.log('priority value:', debugData.priority);
+          console.log('name value:', debugData.name);
+          console.log('amount value:', debugData.amount);
+          console.log('typeof amount:', typeof debugData.amount);
+          setTestResults(prev => prev + `DEBUG: category="${debugData.category}" priority="${debugData.priority}"\n`);
+        }
 
         // Small delay to ensure different timestamps
         await new Promise(resolve => setTimeout(resolve, 1));
@@ -418,14 +449,184 @@ export default function App() {
       }
       setTestResults(prev => prev + `Cursor tracking correct: ${cursorCorrect ? '✓' : '✗'}\n`);
 
-      if (allProcessed && orderCorrect && cursorCorrect) {
-        setTestStatus('success');
-        setTestResults(prev => prev + '\n✅ TEST PASSED!\n');
-        console.log('=== TEST PASSED: All ' + numDocs + ' documents created, iterated, and verified successfully ===');
-      } else {
+      if (!allProcessed || !orderCorrect || !cursorCorrect) {
         setTestStatus('error');
         setTestResults(prev => prev + '\n❌ TEST FAILED!\n');
         console.error('=== TEST FAILED: processed=' + processedDocs.length + '/' + numDocs + ' order=' + orderCorrect + ' cursor=' + cursorCorrect + ' ===');
+        return;
+      }
+
+      // === Virtual View Test ===
+      setTestResults(prev => prev + '\n=== Creating Virtual View ===\n');
+
+      const view = await VirtualViewFactory.createView()
+        .addCategoryColumn("category", {
+          title: "Category",
+          sorting: ColumnSorting.ASCENDING,
+        })
+        .addSortedColumn("priority", ColumnSorting.DESCENDING)
+        .addSortedColumn("name", ColumnSorting.ASCENDING)
+        .addDisplayColumn("index")
+        .addTotalColumn("amount", TotalMode.SUM)
+        .withDB("test-db", db, (doc) => {
+          // Include all documents
+          return true;
+        })
+        .buildAndUpdate();
+
+      setTestResults(prev => prev + 'Virtual view created and populated\n');
+
+      // Navigate the view
+      const nav = VirtualViewFactory.createNavigator(view).build();
+      nav.expandAll();
+
+      setTestResults(prev => prev + '\n=== Virtual View Structure ===\n');
+
+      let entryCount = 0;
+      for await (const entry of nav.entriesForward()) {
+        const indent = "  ".repeat(entry.getLevel());
+
+        if (entry.isCategory()) {
+          const totalAmount = entry.getColumnValue("amount");
+          const docCount = entry.getChildDocumentCount();
+          setTestResults(prev => prev +
+            `${indent}📁 ${entry.getCategoryValue()} (${docCount} docs, Total: $${totalAmount})\n`);
+        } else {
+          const values = entry.getColumnValues();
+          setTestResults(prev => prev +
+            `${indent}📄 ${values.name} [${values.priority}] - $${values.amount}\n`);
+        }
+        entryCount++;
+      }
+
+      setTestResults(prev => prev + `\nView entries: ${entryCount}\n`);
+
+      // Verify view structure
+      const root = view.getRoot();
+      const categoryCount = root.getChildCount();
+      const totalDocCount = root.getDescendantDocumentCount();
+
+      setTestResults(prev => prev + `Categories: ${categoryCount}\n`);
+      setTestResults(prev => prev + `Total documents: ${totalDocCount}\n`);
+
+      if (totalDocCount !== numDocs || categoryCount !== 3) {
+        setTestStatus('error');
+        setTestResults(prev => prev + '\n❌ VIRTUAL VIEW TEST FAILED!\n');
+        console.error('=== VIRTUAL VIEW TEST FAILED: categories=' + categoryCount + '/3 totalDocs=' + totalDocCount + '/' + numDocs + ' ===');
+        return;
+      }
+
+      // === Document Modification Test ===
+      setTestResults(prev => prev + '\n=== Testing Document Modification ===\n');
+
+      // Get the first document (Project Alpha) and modify it
+      const firstDocId = createdDocs[0].docId;
+      setTestResults(prev => prev + `Modifying document: ${firstDocId}\n`);
+
+      // Read current values before modification
+      const beforeDoc = await db.getDocument(firstDocId);
+      const beforeData = beforeDoc.getData();
+      setTestResults(prev => prev + `Before: ${beforeData.name} - ${beforeData.category}/${beforeData.priority}/$${beforeData.amount}\n`);
+
+      // Change Project Alpha from Sales/High/$1000 to Marketing/Low/$99999
+      await db.changeDoc(beforeDoc, (d) => {
+        const data = d.getData();
+        data.category = "Marketing";
+        data.priority = "Low";
+        data.amount = 99999;
+        data.name = "Project Alpha (Modified)";
+      });
+
+      setTestResults(prev => prev + 'Document modified, updating virtual view...\n');
+
+      // Verify the document was actually modified
+      const modifiedDoc = await db.getDocument(firstDocId);
+      const modifiedData = modifiedDoc.getData();
+
+      setTestResults(prev => prev + `\nVerifying document ${firstDocId}:\n`);
+      setTestResults(prev => prev + `  category: ${modifiedData.category} (expected: Marketing)\n`);
+      setTestResults(prev => prev + `  priority: ${modifiedData.priority} (expected: Low)\n`);
+      setTestResults(prev => prev + `  amount: ${modifiedData.amount} (expected: 99999)\n`);
+      setTestResults(prev => prev + `  name: ${modifiedData.name} (expected: Project Alpha (Modified))\n`);
+
+      // Update the virtual view - this will re-query the database
+      setTestResults(prev => prev + `\nCalling view.update() to refresh from database...\n`);
+      await view.update();
+
+      setTestResults(prev => prev + 'Virtual view updated from database\n');
+
+      setTestResults(prev => prev + '\n=== Updated Virtual View Structure ===\n');
+
+      // Navigate the updated view
+      const updatedNav = VirtualViewFactory.createNavigator(view).build();
+      updatedNav.expandAll();
+
+      let foundModified = false;
+      let marketingTotal = 0;
+      let marketingDocs = 0;
+      let salesDocs = 0;
+      let allCategories = {};
+
+      for await (const entry of updatedNav.entriesForward()) {
+        const indent = "  ".repeat(entry.getLevel());
+
+        if (entry.isCategory()) {
+          const categoryName = entry.getCategoryValue();
+          const totalAmount = entry.getColumnValue("amount");
+          const docCount = entry.getChildDocumentCount();
+
+          allCategories[categoryName] = { docs: docCount, total: totalAmount };
+
+          if (categoryName === "Marketing") {
+            marketingTotal = totalAmount;
+            marketingDocs = docCount;
+          } else if (categoryName === "Sales") {
+            salesDocs = docCount;
+          }
+
+          setTestResults(prev => prev +
+            `${indent}📁 ${categoryName} (${docCount} docs, Total: $${totalAmount})\n`);
+        } else {
+          const values = entry.getColumnValues();
+
+          if (values.name === "Project Alpha (Modified)") {
+            foundModified = true;
+            setTestResults(prev => prev +
+              `${indent}📄 ${values.name} [${values.priority}] in ${values.category || '?'} - $${values.amount} ⭐\n`);
+          } else {
+            setTestResults(prev => prev +
+              `${indent}📄 ${values.name} [${values.priority}] - $${values.amount}\n`);
+          }
+        }
+      }
+
+      setTestResults(prev => prev + `\nAll categories: ${JSON.stringify(allCategories, null, 2)}\n`);
+
+      // Verify the modification was caught
+      // Original: Sales had 4 docs (0,3,6,9), Marketing had 3 docs (2,5,8)
+      // After: Sales should have 3 docs, Marketing should have 4 docs
+      const expectedMarketingTotal = 3000 + 6000 + 9000 + 99999; // All 4 Marketing docs
+      const expectedSalesDocs = 3; // Was 4, now 3 (removed Project Alpha)
+      const expectedMarketingDocs = 4; // Was 3, now 4 (added Project Alpha)
+      const modificationCorrect = foundModified && marketingDocs === expectedMarketingDocs;
+      const totalCorrect = marketingTotal === expectedMarketingTotal;
+      const salesCorrect = salesDocs === expectedSalesDocs;
+
+      setTestResults(prev => prev + `\n=== Verification Results ===\n`);
+      setTestResults(prev => prev + `Modified doc found in view: ${foundModified}\n`);
+      setTestResults(prev => prev + `Sales category now has: ${salesDocs} docs (expected ${expectedSalesDocs}) ${salesCorrect ? '✓' : '✗'}\n`);
+      setTestResults(prev => prev + `Marketing category now has: ${marketingDocs} docs (expected ${expectedMarketingDocs}) ${modificationCorrect ? '✓' : '✗'}\n`);
+      setTestResults(prev => prev + `Marketing total: $${marketingTotal} (expected $${expectedMarketingTotal}) ${totalCorrect ? '✓' : '✗'}\n`);
+
+      if (foundModified && modificationCorrect && totalCorrect && salesCorrect) {
+        setTestStatus('success');
+        setTestResults(prev => prev + '\n✅ ALL TESTS PASSED (including modification)!\n');
+        console.log('=== ALL TESTS PASSED: Documents, virtual view, and modification verified ===');
+      } else {
+        setTestStatus('error');
+        setTestResults(prev => prev + '\n❌ MODIFICATION TEST FAILED!\n');
+        setTestResults(prev => prev + `  found=${foundModified}, marketing=${modificationCorrect}, total=${totalCorrect}, sales=${salesCorrect}\n`);
+        console.error('=== MODIFICATION TEST FAILED: found=' + foundModified + ' marketing=' + modificationCorrect + ' total=' + totalCorrect + ' sales=' + salesCorrect + ' ===');
       }
     } catch (error) {
       setTestStatus('error');
