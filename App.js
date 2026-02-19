@@ -5,7 +5,7 @@ import * as Clipboard from 'expo-clipboard';
 import Constants from 'expo-constants';
 
 // Lazy load MindooDB imports - defer until component mounts to avoid blocking app registration
-let BaseMindooTenantFactory, InMemoryContentAddressedStoreFactory, KeyBag, PUBLIC_INFOS_KEY_ID;
+let BaseMindooTenantFactory, InMemoryContentAddressedStoreFactory;
 let QuickCryptoAdapter = null;
 let ReactNativeCryptoAdapter = null;
 let VirtualViewFactory, ColumnSorting, TotalMode, VirtualViewDataChange;
@@ -24,8 +24,6 @@ function loadMindooDB() {
     const mindoodb = require('mindoodb');
     BaseMindooTenantFactory = mindoodb.BaseMindooTenantFactory;
     InMemoryContentAddressedStoreFactory = mindoodb.InMemoryContentAddressedStoreFactory;
-    KeyBag = mindoodb.KeyBag;
-    PUBLIC_INFOS_KEY_ID = mindoodb.PUBLIC_INFOS_KEY_ID;
     // Keep both adapters available; choose at runtime
     QuickCryptoAdapter = mindoodb.QuickCryptoAdapter;
     ReactNativeCryptoAdapter = mindoodb.ReactNativeCryptoAdapter;
@@ -110,8 +108,6 @@ export default function App() {
     console.log('=== Validating Imports ===');
     console.log('BaseMindooTenantFactory:', typeof BaseMindooTenantFactory);
     console.log('InMemoryContentAddressedStoreFactory:', typeof InMemoryContentAddressedStoreFactory);
-    console.log('KeyBag:', typeof KeyBag);
-    console.log('PUBLIC_INFOS_KEY_ID:', PUBLIC_INFOS_KEY_ID);
     console.log('QuickCryptoAdapter:', typeof QuickCryptoAdapter);
     console.log('ReactNativeCryptoAdapter:', typeof ReactNativeCryptoAdapter);
     
@@ -126,9 +122,6 @@ export default function App() {
     }
     if (!InMemoryContentAddressedStoreFactory) {
       throw new Error('InMemoryContentAddressedStoreFactory is undefined');
-    }
-    if (!KeyBag) {
-      throw new Error('KeyBag is undefined');
     }
     if (!QuickCryptoAdapter || !ReactNativeCryptoAdapter) {
       throw new Error('Crypto adapters are not available');
@@ -267,71 +260,35 @@ export default function App() {
         throw new Error(`Failed at Step 3 (factory): ${err.message}`, { cause: err });
       }
 
-      setTestResults(prev => prev + 'Step 4: Creating admin user...\n');
-      const adminUserPassword = "adminpass123";
-      let adminUser;
+      setTestResults(prev => prev + 'Step 4: Creating tenant (createTenant convenience API)...\n');
+      const tenantId = "test-tenant-expo-app";
+      let tenant, adminUser, appUser, keyBag;
       try {
         console.log('Step 4: Testing crypto readiness...');
         const testData = new Uint8Array([1, 2, 3]);
         await subtle.digest('SHA-256', testData);
         console.log('Step 4: ✓ Crypto is ready');
-        
-        console.log('Step 4: Calling factory.createUserId...');
-        const createUserIdStart = Date.now();
-        adminUser = await factory.createUserId("CN=admin/O=testtenant", adminUserPassword);
-        const createUserIdTime = Date.now() - createUserIdStart;
-        console.log('Step 4: Admin user created in', createUserIdTime, 'ms');
-        setTestResults(prev => prev + `Step 4: ✓ Admin user created (${createUserIdTime}ms)\n`);
+
+        console.log('Step 4: Calling factory.createTenant...');
+        const createTenantStart = Date.now();
+        const result = await factory.createTenant({
+          tenantId,
+          adminName: "CN=admin/O=testtenant",
+          adminPassword: "adminpass123",
+          userName: "CN=user/O=testtenant",
+          userPassword: "userpass123",
+        });
+        tenant = result.tenant;
+        adminUser = result.adminUser;
+        appUser = result.appUser;
+        keyBag = result.keyBag;
+        const createTenantTime = Date.now() - createTenantStart;
+        console.log('Step 4: Tenant created in', createTenantTime, 'ms');
+        setTestResults(prev => prev + `Step 4: ✓ Tenant created with admin + app user (${createTenantTime}ms)\n`);
       } catch (err) {
         console.error('Step 4: Error:', err);
-        throw new Error(`Failed at Step 4 (createUserId): ${err.message}`, { cause: err });
+        throw new Error(`Failed at Step 4 (createTenant): ${err.message}`, { cause: err });
       }
-
-      setTestResults(prev => prev + 'Creating admin signing key pair...\n');
-      const adminSigningKeyPassword = "adminsigningpass123";
-      const adminSigningKeyPair = await factory.createSigningKeyPair(adminSigningKeyPassword);
-
-      setTestResults(prev => prev + 'Creating admin encryption key pair...\n');
-      const adminEncryptionKeyPair = await factory.createEncryptionKeyPair("adminencpass123");
-
-      setTestResults(prev => prev + 'Creating tenant encryption key...\n');
-      const tenantEncryptionKeyPassword = "tenantkeypass123";
-      const tenantEncryptionKey = await factory.createSymmetricEncryptedPrivateKey(tenantEncryptionKeyPassword);
-
-      setTestResults(prev => prev + 'Creating $publicinfos symmetric key...\n');
-      const publicInfosKey = await factory.createSymmetricEncryptedPrivateKey("publicinfospass123");
-
-      setTestResults(prev => prev + 'Creating KeyBag...\n');
-      const adminKeyBag = new KeyBag(
-        adminUser.userEncryptionKeyPair.privateKey,
-        adminUserPassword,
-        cryptoAdapter
-      );
-
-      setTestResults(prev => prev + 'Adding $publicinfos key to KeyBag...\n');
-      await adminKeyBag.decryptAndImportKey(PUBLIC_INFOS_KEY_ID, publicInfosKey, "publicinfospass123");
-
-      setTestResults(prev => prev + 'Creating tenant...\n');
-      const tenantId = "test-tenant-expo-app";
-      const tenant = await factory.openTenantWithKeys(
-        tenantId,
-        tenantEncryptionKey,
-        tenantEncryptionKeyPassword,
-        adminSigningKeyPair.publicKey,
-        adminEncryptionKeyPair.publicKey,
-        adminUser,
-        adminUserPassword,
-        adminKeyBag
-      );
-
-      setTestResults(prev => prev + 'Registering admin user in directory...\n');
-      const directory = await tenant.openDirectory();
-      const publicAdminUser = factory.toPublicUserId(adminUser);
-      await directory.registerUser(
-        publicAdminUser,
-        adminSigningKeyPair.privateKey,
-        adminSigningKeyPassword
-      );
 
       // Now run the document creation and iteration test
       setTestResults(prev => prev + '\n=== Starting Document Test ===\n');
