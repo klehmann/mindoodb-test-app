@@ -21,7 +21,7 @@ try {
   // If package not available, try importing from source (for development)
   try {
     const path = require("path");
-    const mindoodbPath = path.resolve(__dirname, "../../../../git/mindoodb2/src");
+    const mindoodbPath = path.resolve(__dirname, "../../../../git/mindoodb/src");
     BaseMindooTenantFactory = require(path.join(mindoodbPath, "core/BaseMindooTenantFactory")).BaseMindooTenantFactory;
     InMemoryContentAddressedStoreFactory = require(path.join(mindoodbPath, "core/appendonlystores/InMemoryContentAddressedStore")).InMemoryContentAddressedStoreFactory;
     KeyBag = require(path.join(mindoodbPath, "core/keys/KeyBag")).KeyBag;

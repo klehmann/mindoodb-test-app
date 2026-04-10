@@ -5,7 +5,7 @@ Expo React Native test application for MindooDB with **native Automerge backend*
 ## Purpose
 
 Tests the integration of:
-- **MindooDB** (`/Users/klehmann/git/mindoodb2`) - local npm link
+- **MindooDB** (`/Users/klehmann/git/mindoodb`) - local npm link
 - **react-native-automerge-generated** (`/Users/klehmann/git/react-native-automerge-generated`) - native Rust Automerge bindings
 - **react-native-quick-crypto** (v1.0.7) - native crypto via NitroModules
 
@@ -43,7 +43,7 @@ npm run android
 ```
 App.js (MindooDB test)
        │
-MindooDB (npm link → /Users/klehmann/git/mindoodb2)
+MindooDB (npm link → /Users/klehmann/git/mindoodb)
        │
 @automerge/automerge/slim + UseApi(nativeApi)
        │

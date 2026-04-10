@@ -11,7 +11,7 @@ config.resolver && (config.resolver.unstable_enablePackageExports = true);
 // Enable symlink resolution for linked packages
 config.resolver && (config.resolver.unstable_enableSymlinks = true);
 
-const mindoodbPath = path.resolve(__dirname, '../../git/mindoodb2');
+const mindoodbPath = path.resolve(__dirname, '../../git/mindoodb');
 const automergeGeneratedPath = path.resolve(__dirname, '../../git/react-native-automerge-generated');
 
 // Add local linked packages to watchFolders
@@ -100,7 +100,7 @@ config.resolver = {
     // Resolve crypto dependencies from test app's node_modules when imported from mindoodb
     const cryptoDeps = ['node-forge', 'tweetnacl', 'expo-standard-web-crypto'];
     if (cryptoDeps.includes(moduleName) && 
-        context.originModulePath && context.originModulePath.includes('mindoodb2')) {
+        context.originModulePath && context.originModulePath.includes('mindoodb')) {
       const modulePath = path.resolve(__dirname, 'node_modules', moduleName);
       try {
         const fs = require('fs');
